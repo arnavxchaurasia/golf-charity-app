@@ -38,11 +38,11 @@ function DashboardContent() {
   const init = async () => {
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+   const {
+  data: { session },
+} = await supabase.auth.getSession();
 
-    if (!user) return;
+const user = session!.user;
 
     const [subRes, scoreRes] = await Promise.all([
       supabase

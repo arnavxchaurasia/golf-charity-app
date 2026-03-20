@@ -2,35 +2,43 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 
 export default function ProtectedRoute({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    const checkUser = async () => {
+    const checkSession = async () => {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (!user) {
-        router.push("/auth/login");
-      } else {
-        setLoading(false);
+      if (!session) {
+        // 🔥 use hard redirect (avoids Next.js state issues)
+        window.location.href = "/auth/login";
+        return;
       }
+
+      setAuthorized(true);
+      setLoading(false);
     };
 
-    checkUser();
-  }, [router]);
+    checkSession();
+  }, []);
 
   if (loading) {
-    return <div className="p-10">Checking auth...</div>;
+    return (
+      <div className="p-10 text-center">
+        Checking auth...
+      </div>
+    );
   }
+
+  if (!authorized) return null;
 
   return <>{children}</>;
 }
