@@ -9,23 +9,42 @@ import { motion } from "framer-motion";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // start true until session checked
 
   const router = useRouter();
 
-  /* ================= AUTO REDIRECT IF LOGGED IN ================= */
+  /* ================= AUTH LISTENER (CRITICAL FIX) ================= */
   useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    let isMounted = true;
 
-      if (user) {
+    // 1️⃣ Check existing session
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session && isMounted) {
         router.replace("/dashboard");
+      } else {
+        setLoading(false);
       }
     };
 
-    checkUser();
+    checkSession();
+
+    // 2️⃣ Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        router.replace("/dashboard");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   /* ================= SIGNUP ================= */
@@ -57,21 +76,25 @@ export default function Signup() {
 
     const user = data.user;
 
-    // ✅ create profile
+    // ✅ create profile safely
     if (user) {
       await supabase.from("profiles").upsert({
         id: user.id,
       });
     }
 
-    router.refresh();
-
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 100);
-
-    setLoading(false);
+    // ❌ no manual redirect
+    // listener will handle it
   };
+
+  /* ================= LOADING SCREEN ================= */
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Checking session...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen grid md:grid-cols-2">
