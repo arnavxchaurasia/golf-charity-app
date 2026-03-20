@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -9,31 +9,10 @@ import { motion } from "framer-motion";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
 
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  /* ================= CHECK EXISTING SESSION ================= */
-  useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session) {
-        // 🔥 FIX: force full reload
-        window.location.href = "/dashboard";
-        return;
-      }
-
-      setCheckingSession(false);
-    };
-
-    checkSession();
-  }, []);
 
   /* ================= LOGIN ================= */
   const handleLogin = async () => {
@@ -57,23 +36,12 @@ export default function Login() {
       return;
     }
 
-    // 🔥 FINAL FIX: force reload after login
+    // ✅ ALWAYS force reload after login
     const redirectTo =
       searchParams.get("redirect") || "/dashboard";
 
     window.location.href = redirectTo;
   };
-
-  /* ================= LOADING SCREEN ================= */
-  if (checkingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">
-          Checking session...
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen grid md:grid-cols-2">

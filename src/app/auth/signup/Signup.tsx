@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -9,30 +9,9 @@ import { motion } from "framer-motion";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
 
   const router = useRouter();
-
-  /* ================= CHECK EXISTING SESSION ================= */
-  useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session) {
-        // 🔥 FIX: force full reload
-        window.location.href = "/dashboard";
-        return;
-      }
-
-      setCheckingSession(false);
-    };
-
-    checkSession();
-  }, []);
 
   /* ================= SIGNUP ================= */
   const handleSignup = async () => {
@@ -70,20 +49,9 @@ export default function Signup() {
       });
     }
 
-    // 🔥 FINAL FIX: force reload after signup
+    // ✅ redirect AFTER signup only
     window.location.href = "/dashboard";
   };
-
-  /* ================= LOADING SCREEN ================= */
-  if (checkingSession) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">
-          Checking session...
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen grid md:grid-cols-2">

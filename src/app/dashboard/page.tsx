@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import ProtectedRoute from "@/components/ProtectedRoute";
 import { motion } from "framer-motion";
 
 /* ---------------- UI ---------------- */
@@ -35,35 +34,42 @@ function DashboardContent() {
 
   /* ---------------- INIT ---------------- */
 
-  const init = async () => {
-    setLoading(true);
+const init = async () => {
+  setLoading(true);
 
-   const {
-  data: { session },
-} = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-const user = session!.user;
+  // ❗ ONLY redirect if DEFINITELY no session
+  if (!session) {
+    setLoading(false); // stop loading first
+    window.location.href = "/auth/login";
+    return;
+  }
 
-    const [subRes, scoreRes] = await Promise.all([
-      supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+  const user = session.user;
 
-      supabase
-        .from("scores")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("played_at", { ascending: false }),
-    ]);
+  const [subRes, scoreRes] = await Promise.all([
+    supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
 
-    setSubscription(subRes.data);
-    setScores(scoreRes.data || []);
-    setLoading(false);
-  };
+    supabase
+      .from("scores")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("played_at", { ascending: false }),
+  ]);
+
+  setSubscription(subRes.data);
+  setScores(scoreRes.data || []);
+  setLoading(false);
+};
 
   useEffect(() => {
     init();
@@ -328,9 +334,5 @@ function Badge({ label }: any) {
 /* ---------------- WRAPPER ---------------- */
 
 export default function Dashboard() {
-  return (
-    <ProtectedRoute>
-      <DashboardContent />
-    </ProtectedRoute>
-  );
+  return <DashboardContent />;
 }
