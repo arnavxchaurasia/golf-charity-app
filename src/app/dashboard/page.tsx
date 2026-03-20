@@ -2,58 +2,55 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { motion } from "framer-motion";
 
-export default function Dashboard() {
+/* ---------------- UI ---------------- */
+
+function Card({ children }: any) {
+  return (
+    <div className="rounded-3xl border border-border bg-white/80 backdrop-blur p-6 shadow-xl hover:shadow-2xl transition">
+      {children}
+    </div>
+  );
+}
+
+/* ---------------- RANK SYSTEM ---------------- */
+
+function getRank(avg: number) {
+  if (avg < 15) return { name: "Bronze", color: "text-amber-600" };
+  if (avg < 25) return { name: "Silver", color: "text-gray-500" };
+  if (avg < 35) return { name: "Gold", color: "text-yellow-500" };
+  return { name: "Elite", color: "text-purple-600" };
+}
+
+/* ---------------- MAIN ---------------- */
+
+function DashboardContent() {
   const [scores, setScores] = useState<any[]>([]);
-  const [newScore, setNewScore] = useState("");
-
-  const [charities, setCharities] = useState<any[]>([]);
-  const [selectedCharity, setSelectedCharity] = useState("");
-  const [percentage, setPercentage] = useState(10);
-
-  const [winners, setWinners] = useState<any[]>([]);
+  const [score, setScore] = useState(20);
   const [subscription, setSubscription] = useState<any>(null);
-  const [donations, setDonations] = useState<any[]>([]);
-  const [drawHistory, setDrawHistory] = useState<any[]>([]);
-
   const [loading, setLoading] = useState(true);
 
-  const getUser = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user;
-  };
+  /* ---------------- INIT ---------------- */
 
-  // =========================
-  // 🔥 INIT
-  // =========================
   const init = async () => {
     setLoading(true);
 
-    const user = await getUser();
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    await supabase
-      .from("subscriptions")
-      .update({ status: "expired" })
-      .lt("end_date", new Date().toISOString());
+    if (!user) return;
 
-    const [
-      subRes,
-      scoreRes,
-      charityRes,
-      winnerRes,
-      donationRes,
-      drawRes,
-    ] = await Promise.all([
+    const [subRes, scoreRes] = await Promise.all([
       supabase
         .from("subscriptions")
         .select("*")
         .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle(),
 
       supabase
@@ -61,57 +58,10 @@ export default function Dashboard() {
         .select("*")
         .eq("user_id", user.id)
         .order("played_at", { ascending: false }),
-
-      supabase.from("charities").select("*"),
-
-      supabase
-        .from("winners")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-
-      supabase
-        .from("donations")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-
-      supabase
-        .from("draws")
-        .select(`
-          id,
-          numbers,
-          draw_month,
-          winners (
-            user_id,
-            payout,
-            match_count
-          )
-        `)
-        .order("created_at", { ascending: false }),
     ]);
 
     setSubscription(subRes.data);
     setScores(scoreRes.data || []);
-    setCharities(charityRes.data || []);
-    setWinners(winnerRes.data || []);
-    setDonations(donationRes.data || []);
-
-    // 🔥 Process draw history
-    const formatted =
-      drawRes.data?.map((draw: any) => {
-        const userWin = draw.winners.find(
-          (w: any) => w.user_id === user.id
-        );
-
-        return {
-          ...draw,
-          userWin,
-        };
-      }) || [];
-
-    setDrawHistory(formatted);
-
     setLoading(false);
   };
 
@@ -119,107 +69,234 @@ export default function Dashboard() {
     init();
   }, []);
 
-  // =========================
-  // 🔹 ACTIVE CHECK
-  // =========================
   const isActive =
     subscription?.status === "active" &&
     new Date(subscription?.end_date) > new Date();
 
-  // =========================
-  // 🔹 ADD SCORE
-  // =========================
+  /* ---------------- LOGIC ---------------- */
+
+  const avg =
+    scores.length > 0
+      ? Math.round(
+          scores.reduce((a, b) => a + b.score, 0) / scores.length
+        )
+      : 0;
+
+  const best =
+    scores.length > 0
+      ? Math.max(...scores.map((s) => s.score))
+      : 0;
+
+  const rank = getRank(avg);
+
+  const streak = scores.length >= 3 ? "🔥 Active" : "—";
+
+  /* ---------------- ADD SCORE ---------------- */
+
   const addScore = async () => {
-    if (!isActive) return alert("Active subscription required");
+    if (!isActive) return toast.error("Subscription required");
 
-    const scoreValue = parseInt(newScore);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (!scoreValue || scoreValue < 1 || scoreValue > 45) {
-      return alert("Score must be between 1–45");
+      await fetch("/api/add-score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ score }),
+      });
+
+      toast.success("Score saved 🎯");
+      init();
+    } catch {
+      toast.error("Failed");
     }
-
-    const user = await getUser();
-    if (!user) return;
-
-    const { data: existing } = await supabase
-      .from("scores")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("played_at", { ascending: true });
-
-    if (existing && existing.length >= 5) {
-      await supabase
-        .from("scores")
-        .delete()
-        .eq("id", existing[0].id);
-    }
-
-    await supabase.from("scores").insert({
-      user_id: user.id,
-      score: scoreValue,
-      played_at: new Date().toISOString(),
-    });
-
-    setNewScore("");
-    init();
   };
 
-  // =========================
-  // 🔹 SAVE CHARITY
-  // =========================
-  const saveCharity = async () => {
-    const user = await getUser();
-    if (!user) return;
-
-    if (!selectedCharity || percentage < 10) {
-      return alert("Select charity & minimum 10%");
-    }
-
-    await supabase
-      .from("profiles")
-      .update({
-        charity_id: selectedCharity,
-        charity_percentage: percentage,
-      })
-      .eq("id", user.id);
-
-    alert("Charity updated!");
-  };
-
-  // =========================
-  // 🔹 UPLOAD PROOF
-  // =========================
-  const uploadProof = async (file: File, winnerId: string) => {
-    if (!file) return;
-
-    const path = `proof-${winnerId}-${Date.now()}`;
-
-    const { error } = await supabase.storage
-      .from("proofs")
-      .upload(path, file);
-
-    if (error) return alert("Upload failed");
-
-    const { data } = supabase.storage
-      .from("proofs")
-      .getPublicUrl(path);
-
-    await supabase
-      .from("winners")
-      .update({ proof_url: data.publicUrl })
-      .eq("id", winnerId);
-
-    init();
-  };
-
-  if (loading) return <div className="p-10">Loading...</div>;
+  if (loading) return <div className="p-20 text-center">Loading...</div>;
 
   return (
-    <div className="p-10 max-w-5xl mx-auto space-y-8">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
+    <div className="section space-y-12">
 
-      {/* Subscription */}
-      <div className="border p-5 rounded-xl">
+      {/* HEADER */}
+      <div>
+        <h1 className="text-4xl font-semibold">Your Game</h1>
+        <p className="text-muted-foreground">
+          Improve. Compete. Give back.
+        </p>
+      </div>
+
+      {/* RANK */}
+      <Card>
+        <h2 className="text-lg mb-2">Your Rank</h2>
+        <p className={`text-3xl font-bold ${rank.color}`}>
+          {rank.name}
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Based on your performance
+        </p>
+      </Card>
+
+      {/* STATS */}
+      <div className="grid md:grid-cols-3 gap-5">
+        <Card>
+          <p className="text-sm text-muted-foreground">Avg Score</p>
+          <p className="text-2xl font-bold">{avg}</p>
+        </Card>
+
+        <Card>
+          <p className="text-sm text-muted-foreground">Best Score</p>
+          <p className="text-2xl font-bold">{best}</p>
+        </Card>
+
+        <Card>
+          <p className="text-sm text-muted-foreground">Streak</p>
+          <p className="text-2xl font-bold">{streak}</p>
+        </Card>
+      </div>
+
+      {/* 🎯 MISSIONS */}
+      <Card>
+        <h2 className="text-xl font-semibold mb-6">
+          Challenges 🎯
+        </h2>
+
+        <div className="space-y-5">
+
+          {/* BEAT BEST */}
+          <div>
+            <p className="text-sm font-medium">
+              🔥 Beat your best ({best})
+            </p>
+            <div className="h-2 bg-gray-200 rounded mt-2">
+              <div
+                className="h-2 bg-red-500 rounded"
+                style={{ width: `${(avg / (best + 3)) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* CONSISTENCY */}
+          <div>
+            <p className="text-sm font-medium">
+              🎯 Reach avg 30
+            </p>
+            <div className="h-2 bg-gray-200 rounded mt-2">
+              <div
+                className="h-2 bg-blue-500 rounded"
+                style={{ width: `${(avg / 30) * 100}%` }}
+              />
+            </div>
+          </div>
+
+        </div>
+      </Card>
+
+      {/* 🎖 BADGES */}
+      <Card>
+        <h2 className="text-xl font-semibold mb-6">
+          Achievements 🎖
+        </h2>
+
+        <div className="flex gap-4 flex-wrap">
+
+          {scores.length >= 1 && (
+            <Badge label="First Score" />
+          )}
+
+          {scores.length >= 5 && (
+            <Badge label="Consistent Player" />
+          )}
+
+          {best >= 30 && (
+            <Badge label="High Performer" />
+          )}
+
+          {avg >= 25 && (
+            <Badge label="Rising Star" />
+          )}
+
+        </div>
+      </Card>
+
+      {/* 🎯 SCORE INPUT */}
+      <Card>
+        <h2 className="text-xl font-semibold mb-4">
+          Enter Score
+        </h2>
+
+        <div className="flex items-center gap-5">
+
+          <button
+            onClick={() => setScore((s) => Math.max(1, s - 1))}
+            className="w-12 h-12 rounded-full bg-gray-200"
+          >
+            −
+          </button>
+
+          <motion.div
+            key={score}
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            className="text-5xl font-bold"
+          >
+            {score}
+          </motion.div>
+
+          <button
+            onClick={() => setScore((s) => Math.min(45, s + 1))}
+            className="w-12 h-12 rounded-full bg-gray-200"
+          >
+            +
+          </button>
+
+          <button
+            onClick={addScore}
+            className="ml-6 px-6 py-2 bg-black text-white rounded-xl"
+          >
+            Save
+          </button>
+        </div>
+      </Card>
+
+      {/* 📊 HISTORY */}
+      <Card>
+        <h2 className="text-xl font-semibold mb-6">
+          Score History
+        </h2>
+
+        <div className="grid md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto">
+
+          {scores.map((s, i) => (
+            <motion.div
+              key={s.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="p-4 border rounded-xl"
+            >
+              <p className="text-sm text-muted-foreground">
+                {new Date(s.played_at).toLocaleDateString()}
+              </p>
+
+              <p className="text-2xl font-bold">
+                {s.score}
+              </p>
+            </motion.div>
+          ))}
+
+        </div>
+      </Card>
+
+      {/* SUBSCRIPTION */}
+      <Card>
+        <h2 className="text-xl font-semibold mb-4">
+          Membership
+        </h2>
+
         <p>
           Status:{" "}
           <span className={isActive ? "text-green-500" : "text-red-500"}>
@@ -227,165 +304,33 @@ export default function Dashboard() {
           </span>
         </p>
 
-        <p>Plan: {subscription?.plan || "N/A"}</p>
-
-        <p>
-          Expires:{" "}
-          {subscription?.end_date
-            ? new Date(subscription.end_date).toLocaleDateString()
-            : "N/A"}
-        </p>
-
-        {!isActive && (
-          <a
-            href="/subscribe"
-            className="inline-block mt-3 bg-green-600 px-4 py-2 rounded text-white"
-          >
-            Subscribe
-          </a>
-        )}
-      </div>
-
-      {/* Add Score */}
-      <div>
-        <h2 className="text-xl mb-2">Add Score</h2>
-
-        <input
-          type="number"
-          value={newScore}
-          onChange={(e) => setNewScore(e.target.value)}
-          className="border p-2 mr-2"
-        />
-
         <button
-          onClick={addScore}
-          disabled={!isActive}
-          className={`px-4 py-2 text-white ${
-            isActive ? "bg-black" : "bg-gray-500"
-          }`}
+          onClick={() => (window.location.href = "/subscribe")}
+          className="mt-5 px-5 py-2 bg-blue-600 text-white rounded-xl"
         >
-          Add
+          Manage Subscription
         </button>
-      </div>
-
-      {/* Scores */}
-      <div>
-        <h2 className="text-xl mb-2">Your Scores</h2>
-
-        {scores.map((s) => (
-          <div key={s.id} className="border p-2 mb-2 rounded">
-            {s.score} —{" "}
-            {new Date(s.played_at).toLocaleDateString()}
-          </div>
-        ))}
-      </div>
-
-      {/* Charity */}
-      <div>
-        <h2 className="text-xl mb-2">Charity</h2>
-
-        <select
-          className="border p-2 w-full mb-2"
-          onChange={(e) => setSelectedCharity(e.target.value)}
-        >
-          <option>Select Charity</option>
-          {charities.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          value={percentage}
-          onChange={(e) =>
-            setPercentage(parseInt(e.target.value) || 0)
-          }
-          className="border p-2 w-full mb-2"
-        />
-
-        <button
-          onClick={saveCharity}
-          className="bg-blue-600 text-white px-4 py-2"
-        >
-          Save
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="border p-4 rounded">
-        <p>Total Draws: {winners.length}</p>
-        <p>
-          Total Won: ₹
-          {winners.reduce((a, w) => a + (w.payout || 0), 0).toFixed(2)}
-        </p>
-      </div>
-
-      {/* Donations */}
-      <div className="border p-4 rounded">
-        <h2 className="text-xl mb-2">Your Impact</h2>
-
-        <p className="text-2xl font-bold">
-          ₹
-          {donations
-            .reduce((a, d) => a + (d.amount || 0), 0)
-            .toFixed(2)}
-        </p>
-      </div>
-
-      {/* Winnings */}
-      <div>
-        <h2 className="text-xl mb-2">Winnings</h2>
-
-        {winners.map((w) => (
-          <div key={w.id} className="border p-3 mb-3 rounded">
-            <p>Match: {w.match_count}</p>
-            <p>Payout: ₹{w.payout?.toFixed(2)}</p>
-            <p>Status: {w.status}</p>
-
-            {!w.proof_url && w.status === "pending" && (
-              <input
-                type="file"
-                onChange={(e) =>
-                  e.target.files &&
-                  uploadProof(e.target.files[0], w.id)
-                }
-              />
-            )}
-
-            {w.proof_url && (
-              <a
-                href={w.proof_url}
-                target="_blank"
-                className="text-blue-500"
-              >
-                View Proof
-              </a>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* 🔥 DRAW HISTORY */}
-      <div>
-        <h2 className="text-xl font-bold mb-4">Draw History</h2>
-
-        {drawHistory.map((d) => (
-          <div key={d.id} className="border p-4 mb-3 rounded">
-            <p>{new Date(d.draw_month).toLocaleDateString()}</p>
-            <p>Numbers: {d.numbers.join(", ")}</p>
-
-            {d.userWin ? (
-              <p className="text-green-500">
-                Won ₹{d.userWin.payout} (Match {d.userWin.match_count})
-              </p>
-            ) : (
-              <p className="text-gray-400">No win</p>
-            )}
-          </div>
-        ))}
-      </div>
+      </Card>
     </div>
+  );
+}
+
+/* ---------------- BADGE ---------------- */
+
+function Badge({ label }: any) {
+  return (
+    <div className="px-4 py-2 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-full text-sm">
+      {label}
+    </div>
+  );
+}
+
+/* ---------------- WRAPPER ---------------- */
+
+export default function Dashboard() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   );
 }

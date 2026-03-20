@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 export default function SubscribePage() {
-  const [loading, setLoading] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<
+    "monthly" | "yearly" | null
+  >(null);
 
-  // 🔥 Load Razorpay script
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -15,162 +18,206 @@ export default function SubscribePage() {
   }, []);
 
   const handleSubscribe = async (plan: "monthly" | "yearly") => {
-    setLoading(true);
+    setLoadingPlan(plan);
 
     try {
+      /* ================= AUTH ================= */
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const user = session?.user;
 
       if (!user) {
-        alert("Please login first");
-        setLoading(false);
+        toast.error("Please login first");
         return;
       }
 
-      // 🔥 Create order (backend)
+      /* ================= CREATE ORDER ================= */
       const res = await fetch("/api/create-order", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`, // ✅ FIXED
         },
         body: JSON.stringify({
-          userId: user.id,
           plan,
         }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        alert(data.error || "Order failed");
-        setLoading(false);
-        return;
-      }
+      if (!res.ok) throw new Error(data.error);
 
-      // 🔥 Razorpay options
+      /* ================= RAZORPAY ================= */
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: data.amount,
         currency: "INR",
         order_id: data.orderId,
 
-        name: "Golf Charity Platform",
+        name: "BirdieFund",
         description:
           plan === "monthly"
-            ? "Monthly Subscription"
-            : "Yearly Subscription",
+            ? "Monthly Membership"
+            : "Yearly Membership",
 
-        handler: async function (response: any) {
-          const verifyRes = await fetch("/api/verify-payment", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              ...response,
-              userId: user.id,
-              plan,
-            }),
-          });
+        handler: async (response: any) => {
+          try {
+            const verifyRes = await fetch(
+              "/api/verify-payment",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${session.access_token}`, // 🔥 IMPORTANT FIX
+                },
+                body: JSON.stringify({
+                  ...response,
+                  plan,
+                }),
+              }
+            );
 
-          const verifyData = await verifyRes.json();
+            const verifyData = await verifyRes.json();
 
-          if (!verifyRes.ok) {
-            alert("Payment verification failed");
-            return;
+            if (!verifyRes.ok) {
+              throw new Error(verifyData.error);
+            }
+
+            toast.success("Subscription activated 🎉");
+
+            window.location.href = "/dashboard";
+          } catch (err) {
+            toast.error("Payment verification failed");
           }
-
-          alert("Subscription activated!");
-          window.location.href = "/dashboard";
         },
 
         theme: {
-          color: "#2563eb",
+          color: "#4f46e5",
         },
       };
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Something went wrong");
+      toast.error(err.message || "Payment failed");
     } finally {
-      setLoading(false);
+      setLoadingPlan(null);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
-      <div className="max-w-5xl w-full">
+    <div className="min-h-screen px-6 py-24 max-w-7xl mx-auto">
 
-        <h1 className="text-4xl font-bold text-center mb-12">
-          Choose Your Plan
+      {/* HEADER */}
+      <div className="text-center mb-20">
+        <h1 className="text-5xl font-semibold tracking-tight">
+          Choose your plan
         </h1>
+        <p className="text-muted-foreground mt-4 text-lg">
+          Play better. Win bigger. Give more.
+        </p>
+      </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
+      {/* CARDS */}
+      <div className="grid md:grid-cols-2 gap-10">
 
-          {/* Monthly */}
-          <div className="border border-gray-300 dark:border-gray-800 rounded-2xl p-8 bg-white dark:bg-gray-900 shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4">
-              Monthly Plan
+        {/* MONTHLY */}
+        <motion.div
+          whileHover={{ y: -8 }}
+          className="rounded-3xl border border-border bg-white shadow-lg overflow-hidden transition"
+        >
+          <img
+            src="https://images.unsplash.com/photo-1599058917212-d750089bc07e?q=80&w=1200&auto=format&fit=crop"
+            className="h-44 w-full object-cover"
+          />
+
+          <div className="p-8">
+            <h2 className="text-2xl font-semibold">
+              Monthly
             </h2>
 
-            <p className="text-4xl font-bold mb-6">
-              ₹100<span className="text-sm">/month</span>
+            <p className="text-4xl font-bold mt-4">
+              ₹100
+              <span className="text-sm text-muted-foreground ml-1">
+                /month
+              </span>
             </p>
 
-            <ul className="text-gray-500 mb-6 space-y-2">
-              <li>✔ Participate in monthly draws</li>
-              <li>✔ Track golf scores</li>
-              <li>✔ Support charities</li>
+            <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
+              <li>✔ Monthly prize draws</li>
+              <li>✔ Track your golf scores</li>
+              <li>✔ Support real charities</li>
             </ul>
 
             <button
               onClick={() => handleSubscribe("monthly")}
-              disabled={loading}
-              className="w-full bg-blue-600 py-3 rounded-xl hover:bg-blue-700 transition text-white"
+              disabled={loadingPlan === "monthly"}
+              className="w-full mt-8 py-3 rounded-xl bg-slate-900 text-white font-medium hover:opacity-90 transition disabled:opacity-50"
             >
-              {loading ? "Processing..." : "Subscribe Monthly"}
+              {loadingPlan === "monthly"
+                ? "Processing..."
+                : "Start Monthly"}
             </button>
           </div>
+        </motion.div>
 
-          {/* Yearly */}
-          <div className="border border-gray-300 dark:border-gray-800 rounded-2xl p-8 bg-white dark:bg-gray-900 shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4">
-              Yearly Plan
+        {/* YEARLY (FEATURED) */}
+        <motion.div
+          whileHover={{ y: -10 }}
+          className="rounded-3xl border border-border bg-gradient-to-br from-blue-50 via-white to-violet-50 shadow-2xl overflow-hidden relative"
+        >
+          {/* Badge */}
+          <div className="absolute top-4 right-4 text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full">
+            Best Value
+          </div>
+
+          <img
+            src="https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1200&auto=format&fit=crop"
+            className="h-44 w-full object-cover"
+          />
+
+          <div className="p-8">
+            <h2 className="text-2xl font-semibold">
+              Yearly
             </h2>
 
-            <p className="text-4xl font-bold mb-2">
-              ₹1000<span className="text-sm">/year</span>
+            <p className="text-4xl font-bold mt-4">
+              ₹1000
+              <span className="text-sm text-muted-foreground ml-1">
+                /year
+              </span>
             </p>
 
-            <p className="text-green-500 mb-4">
+            <p className="text-green-600 text-sm mt-2">
               Save 17%
             </p>
 
-            <ul className="text-gray-500 mb-6 space-y-2">
+            <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
               <li>✔ Everything in monthly</li>
-              <li>✔ Better savings</li>
-              <li>✔ Priority participation</li>
+              <li>✔ Priority draws</li>
+              <li>✔ Best value plan</li>
             </ul>
 
             <button
               onClick={() => handleSubscribe("yearly")}
-              disabled={loading}
-              className="w-full bg-purple-600 py-3 rounded-xl hover:bg-purple-700 transition text-white"
+              disabled={loadingPlan === "yearly"}
+              className="w-full mt-8 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:opacity-90 transition disabled:opacity-50"
             >
-              {loading ? "Processing..." : "Subscribe Yearly"}
+              {loadingPlan === "yearly"
+                ? "Processing..."
+                : "Go Yearly"}
             </button>
           </div>
-
-        </div>
-
-        <p className="text-center text-sm text-gray-500 mt-10">
-          Secure payments powered by Razorpay. A portion goes to charity.
-        </p>
-
+        </motion.div>
       </div>
+
+      {/* FOOTER */}
+      <p className="text-center text-sm text-muted-foreground mt-16">
+        Secure payments powered by Razorpay. A portion goes to charity.
+      </p>
     </div>
   );
 }

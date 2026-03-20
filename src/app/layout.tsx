@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import Providers from "@/components/Providers"; 
+import Providers from "@/components/Providers";
+import { Toaster } from "@/components/ui/toaster";
+
+/* ------------------ FONTS ------------------ */
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,10 +19,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/* ------------------ METADATA ------------------ */
+
 export const metadata: Metadata = {
-  title: "Golf Charity Platform",
-  description: "Play, Win, Give Back",
+  title: "BirdieFund — Play, Win, Give Back",
+  description:
+    "A modern golf charity platform where performance meets impact.",
 };
+
+/* ------------------ LAYOUT ------------------ */
 
 export default function RootLayout({
   children,
@@ -31,18 +40,29 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen flex flex-col bg-white text-black dark:bg-black dark:text-white transition-colors">
+      {/* ❌ removed hardcoded bg-white / black */}
+      <body className="min-h-screen flex flex-col bg-background text-foreground antialiased">
 
-        <Providers> {/* 👈 client wrapper */}
+        {/* 🌈 GLOBAL BACKGROUND (premium feel) */}
+        <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),_transparent_30%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.06),_transparent_30%)]" />
 
+        <Providers>
+
+          {/* 🔥 NAVBAR */}
           <Navbar />
 
-          <main className="flex-grow pt-20">{children}</main>
+          {/* 🔥 MAIN CONTENT */}
+          <main className="flex-grow pt-24">
+            {children}
+          </main>
 
+          {/* 🔥 FOOTER */}
           <Footer />
 
-        </Providers>
+          {/* 🔥 TOASTER */}
+          <Toaster />
 
+        </Providers>
       </body>
     </html>
   );

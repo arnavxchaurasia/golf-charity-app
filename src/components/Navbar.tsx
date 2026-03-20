@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "next-themes";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sun, Moon } from "lucide-react";
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
@@ -11,11 +14,12 @@ export default function Navbar() {
 
   const { theme, setTheme } = useTheme();
 
-  // 🔥 Fix hydration
+  // Fix hydration
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Get user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
@@ -27,74 +31,143 @@ export default function Navbar() {
     window.location.href = "/";
   };
 
-  if (!mounted) return null; // 🔥 prevents mismatch
+  // 🔐 TEMP ADMIN CHECK (replace later with DB role)
+  const isAdmin = user?.email === "your@email.com";
+
+  if (!mounted) return null;
 
   return (
-    <nav className="fixed top-0 w-full z-50 backdrop-blur bg-white/70 dark:bg-black/70 border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex justify-between items-center">
-      
-      <a href="/" className="text-lg font-semibold">
-        Golf Charity
-      </a>
+    <nav className="fixed top-0 w-full z-50 border-b border-border backdrop-blur-xl bg-white/70 dark:bg-black/60">
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
-      <div className="flex items-center gap-4">
+        {/* LOGO */}
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
+          <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            BirdieFund
+          </span>
+        </Link>
 
-        {/* 🔥 Theme Toggle */}
-        <button
-          onClick={() =>
-            setTheme(theme === "dark" ? "light" : "dark")
-          }
-          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
-        >
-          {theme === "dark" ? "☀️" : "🌙"}
-        </button>
+        {/* CENTER LINKS */}
+        <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
+          <Link href="/dashboard" className="hover:text-foreground transition">
+            Dashboard
+          </Link>
+          <Link href="/leaderboard" className="hover:text-foreground transition">
+            Leaderboard
+          </Link>
+          <Link href="/charities" className="hover:text-foreground transition">
+            Charities
+          </Link>
 
-          <a href="/leaderboard">Leaderboard</a>
+          {/* 🔐 Admin only */}
+          {user && isAdmin && (
+            <Link href="/admin" className="hover:text-foreground transition">
+              Admin
+            </Link>
+          )}
+        </div>
 
-        {!user ? (
-          <>
-            <a href="/auth/login">Login</a>
-            <a
-              href="/auth/signup"
-              className="bg-black text-white px-4 py-2 rounded-lg"
-            >
-              Sign Up
-            </a>
-          </>
-        ) : (
-          <div className="relative">
-            <button
-              onClick={() => setOpen(!open)}
-              className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center"
-            >
-              👤
-            </button>
+        {/* RIGHT SIDE */}
+        <div className="flex items-center gap-3">
 
-            {open && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl">
-                <a
-                  href="/dashboard"
-                  className="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  Dashboard
-                </a>
+          {/* THEME TOGGLE
+          <button
+            onClick={() =>
+              setTheme(theme === "dark" ? "light" : "dark")
+            }
+            className="h-10 w-10 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition"
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button> */}
 
-                <a
-                  href="/subscribe"
-                  className="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  Subscription
-                </a>
+          {!user ? (
+            <>
+              {/* LOGIN */}
+              <Link
+                href="/auth/login"
+                className="px-4 py-2 rounded-xl text-sm border border-border hover:bg-muted transition"
+              >
+                Login
+              </Link>
 
-                <button
-                  onClick={logout}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              {/* SIGNUP */}
+              <Link
+                href="/auth/signup"
+                className="px-4 py-2 rounded-xl text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:opacity-90 transition"
+              >
+                Get Started
+              </Link>
+            </>
+          ) : (
+            <div className="relative">
+
+              {/* USER BUTTON */}
+              <button
+                onClick={() => setOpen(!open)}
+                className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white flex items-center justify-center font-medium"
+              >
+                {user.email?.[0]?.toUpperCase()}
+              </button>
+
+              {/* DROPDOWN */}
+              <AnimatePresence>
+                {open && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 mt-3 w-56 rounded-2xl border border-border bg-white dark:bg-black shadow-xl overflow-hidden"
+                  >
+
+                    {/* USER INFO */}
+                    <div className="px-4 py-3 border-b border-border text-xs text-muted-foreground">
+                      {user.email}
+                    </div>
+
+                    <Link
+                      href="/dashboard"
+                      className="block px-4 py-2 hover:bg-muted transition"
+                    >
+                      Dashboard
+                    </Link>
+
+                    <Link
+                      href="/leaderboard"
+                      className="block px-4 py-2 hover:bg-muted transition"
+                    >
+                      Leaderboard
+                    </Link>
+
+                    <Link
+                      href="/charities"
+                      className="block px-4 py-2 hover:bg-muted transition"
+                    >
+                      Charities
+                    </Link>
+
+                    {/* 🔐 Admin only */}
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        className="block px-4 py-2 hover:bg-muted transition"
+                      >
+                        Admin Panel
+                      </Link>
+                    )}
+
+                    <button
+                      onClick={logout}
+                      className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition"
+                    >
+                      Logout
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   );

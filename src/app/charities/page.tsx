@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { motion } from "framer-motion";
+
+const fallbackImages = [
+  "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?q=80&w=1200",
+  "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=1200",
+  "https://images.unsplash.com/photo-1497032205916-ac775f0649ae?q=80&w=1200",
+  "https://images.unsplash.com/photo-1509099836639-18ba1795216d?q=80&w=1200",
+  "https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=1200",
+];
 
 export default function CharitiesPage() {
   const [charities, setCharities] = useState<any[]>([]);
@@ -22,62 +31,97 @@ export default function CharitiesPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-10">Loading charities...</div>;
+    return (
+      <div className="p-20 text-center text-muted-foreground">
+        Loading charities...
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen px-6 py-16 max-w-7xl mx-auto">
+    <div className="min-h-screen px-6 py-20 max-w-7xl mx-auto">
 
       {/* HEADER */}
-      <div className="text-center mb-16">
-        <h1 className="text-4xl font-bold mb-4">
-          Support Meaningful Causes
+      <div className="text-center mb-20">
+        <h1 className="text-5xl font-semibold tracking-tight">
+          Make Every Round Matter
         </h1>
 
-        <p className="text-gray-500 max-w-2xl mx-auto">
-          A portion of your subscription goes directly to charities you care about.
-          Choose where your impact goes.
+        <p className="text-muted-foreground max-w-2xl mx-auto mt-4 text-lg">
+          Your game does more than win prizes — it creates real impact.
+          Choose where your contribution goes.
         </p>
       </div>
 
       {/* GRID */}
-      <div className="grid md:grid-cols-3 gap-8">
-        {charities.map((c) => (
-          <div
-            key={c.id}
-            className="border border-gray-300 dark:border-gray-800 rounded-2xl p-6 bg-white dark:bg-gray-900 shadow hover:shadow-lg transition"
-          >
-            {/* Image (optional future field) */}
-            <div className="h-40 bg-gray-200 dark:bg-gray-800 rounded-lg mb-4 flex items-center justify-center">
-              <span className="text-gray-400">Charity Image</span>
-            </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
 
-            <h2 className="text-xl font-semibold">{c.name}</h2>
+        {charities.map((c, i) => {
+          const image =
+            c.image_url ||
+            fallbackImages[i % fallbackImages.length];
 
-            <p className="text-gray-500 mt-2 text-sm">
-              {c.description || "No description available"}
-            </p>
-
-            {/* Impact */}
-            <div className="mt-4 text-sm text-gray-400">
-              💖 Donations received: ₹{c.total_donations || 0}
-            </div>
-
-            {/* CTA */}
-            <a
-              href="/dashboard"
-              className="block mt-6 text-center bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+          return (
+            <motion.div
+              key={c.id}
+              whileHover={{ y: -8 }}
+              className="group rounded-3xl overflow-hidden border border-border bg-white shadow-sm transition"
             >
-              Support this Charity
-            </a>
-          </div>
-        ))}
+
+              {/* IMAGE */}
+              <div className="relative h-52 overflow-hidden">
+                <img
+                  src={image}
+                  alt={c.name}
+                  className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
+                />
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+
+                <div className="absolute bottom-4 left-4 right-4 text-white">
+                  <h2 className="text-lg font-semibold">
+                    {c.name}
+                  </h2>
+                </div>
+              </div>
+
+              {/* CONTENT */}
+              <div className="p-5 space-y-3">
+
+                <p className="text-sm text-muted-foreground line-clamp-3">
+                  {c.description ||
+                    "Helping communities and creating meaningful impact."}
+                </p>
+
+                {/* IMPACT */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Donations
+                  </span>
+                  <span className="font-medium text-foreground">
+                    ₹{c.total_donations || 0}
+                  </span>
+                </div>
+
+                {/* CTA */}
+                <a
+                  href="/dashboard"
+                  className="block mt-4 text-center py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:opacity-90 transition"
+                >
+                  Support this cause
+                </a>
+              </div>
+
+            </motion.div>
+          );
+        })}
+
       </div>
 
-      {/* EMPTY STATE */}
+      {/* EMPTY */}
       {charities.length === 0 && (
-        <div className="text-center text-gray-500 mt-10">
-          No charities available yet.
+        <div className="text-center text-muted-foreground mt-20">
+          No charities yet — check back soon 🌱
         </div>
       )}
     </div>

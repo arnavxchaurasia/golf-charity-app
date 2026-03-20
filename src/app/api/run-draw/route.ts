@@ -1,17 +1,81 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
-const supabase = createClient(
+const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // 🔥 IMPORTANT
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    // =========================
+    // 🔐 STEP 1: GET TOKEN
+    // =========================
+    const token = req.headers
+      .get("authorization")
+      ?.replace("Bearer ", "");
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // =========================
+    // 🔐 STEP 2: VERIFY USER
+    // =========================
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    // =========================
+    // 🔐 STEP 3: ADMIN CHECK
+    // =========================
+    const { data: profile, error: profileError } =
+      await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+    if (profileError || profile?.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    // =========================
+    // 🧾 PARSE BODY
+    // =========================
+    const body = await req.json().catch(() => null);
+    const drawType = body?.drawType || "random";
+
+    if (!["random", "weighted"].includes(drawType)) {
+      return NextResponse.json(
+        { error: "Invalid draw type" },
+        { status: 400 }
+      );
+    }
+
     const monthKey = new Date().toISOString().slice(0, 7);
 
-    // Prevent duplicate draw
-    const { data: existingDraw } = await supabase
+    // =========================
+    // ❌ PREVENT DUPLICATE DRAW
+    // =========================
+    const { data: existingDraw } = await adminSupabase
       .from("draws")
       .select("id")
       .eq("month_key", monthKey)
@@ -24,8 +88,10 @@ export async function POST() {
       );
     }
 
-    // Active users
-    const { data: subs } = await supabase
+    // =========================
+    // 👥 ACTIVE USERS
+    // =========================
+    const { data: subs } = await adminSupabase
       .from("subscriptions")
       .select("user_id")
       .eq("status", "active")
@@ -40,8 +106,10 @@ export async function POST() {
       );
     }
 
-    // Previous rollover
-    const { data: lastDraw } = await supabase
+    // =========================
+    // 🔁 ROLLOVER
+    // =========================
+    const { data: lastDraw } = await adminSupabase
       .from("draws")
       .select("rollover_amount")
       .order("created_at", { ascending: false })
@@ -50,19 +118,64 @@ export async function POST() {
 
     const previousRollover = lastDraw?.rollover_amount || 0;
 
-    // Draw numbers
-    const drawNumbers = Array.from({ length: 5 }, () =>
-      Math.floor(Math.random() * 45) + 1
-    );
+    // =========================
+    // 🎯 DRAW NUMBERS
+    // =========================
+    let drawNumbers: number[] = [];
 
+    if (drawType === "weighted") {
+      const { data: allScores } = await adminSupabase
+        .from("scores")
+        .select("score");
+
+      const frequency: Record<number, number> = {};
+
+      allScores?.forEach((row) => {
+        frequency[row.score] =
+          (frequency[row.score] || 0) + 1;
+      });
+
+      const weightedPool: number[] = [];
+
+      Object.entries(frequency).forEach(([num, count]) => {
+        for (let i = 0; i < count; i++) {
+          weightedPool.push(Number(num));
+        }
+      });
+
+      while (drawNumbers.length < 5) {
+        const pool =
+          weightedPool.length > 0
+            ? weightedPool
+            : Array.from({ length: 45 }, (_, i) => i + 1);
+
+        const pick =
+          pool[Math.floor(Math.random() * pool.length)];
+
+        if (!drawNumbers.includes(pick)) {
+          drawNumbers.push(pick);
+        }
+      }
+    } else {
+      while (drawNumbers.length < 5) {
+        const num = Math.floor(Math.random() * 45) + 1;
+        if (!drawNumbers.includes(num)) drawNumbers.push(num);
+      }
+    }
+
+    // =========================
+    // 💰 POOL
+    // =========================
     const basePool = userIds.length * 100;
 
     const match5Pool = basePool * 0.4 + previousRollover;
     const match4Pool = basePool * 0.35;
     const match3Pool = basePool * 0.25;
 
-    // Fetch scores (optimized)
-    const { data: scores } = await supabase
+    // =========================
+    // 📊 SCORES
+    // =========================
+    const { data: scores } = await adminSupabase
       .from("scores")
       .select("user_id, score")
       .in("user_id", userIds);
@@ -76,41 +189,53 @@ export async function POST() {
 
     const winnersByTier: any = { 3: [], 4: [], 5: [] };
 
-    for (const userId of userIds) {
-      const userScores = scoreMap[userId] || [];
+    for (const uid of userIds) {
+      const userScores = scoreMap[uid] || [];
 
       const matches = userScores.filter((s) =>
         drawNumbers.includes(s)
       ).length;
 
       if (matches >= 3) {
-        winnersByTier[matches].push(userId);
+        winnersByTier[matches].push(uid);
       }
     }
 
     const hasMatch5 = winnersByTier[5].length > 0;
     const newRollover = hasMatch5 ? 0 : match5Pool;
 
-    // Create draw
-    const { data: draw } = await supabase
-      .from("draws")
-      .insert({
-        draw_month: new Date().toISOString(),
-        month_key: monthKey,
-        numbers: drawNumbers,
-        rollover_amount: newRollover,
-        status: "published",
-      })
-      .select()
-      .single();
+    // =========================
+    // 🧾 CREATE DRAW
+    // =========================
+    const { data: draw, error: drawError } =
+      await adminSupabase
+        .from("draws")
+        .insert({
+          draw_month: new Date().toISOString(),
+          month_key: monthKey,
+          numbers: drawNumbers,
+          rollover_amount: newRollover,
+          status: "published",
+        })
+        .select()
+        .single();
 
+    if (drawError || !draw) {
+      return NextResponse.json(
+        { error: "Draw creation failed" },
+        { status: 500 }
+      );
+    }
+
+    // =========================
+    // 🏆 WINNERS + DONATIONS
+    // =========================
     const winnerRows: any[] = [];
     const donationRows: any[] = [];
 
     for (const tier of [5, 4, 3]) {
       const users = winnersByTier[tier];
       if (!users.length) continue;
-
       if (tier === 5 && !hasMatch5) continue;
 
       const pool =
@@ -122,30 +247,28 @@ export async function POST() {
 
       const payout = pool / users.length;
 
-      for (const userId of users) {
-        const { data: profile } = await supabase
+      for (const uid of users) {
+        const { data: profile } = await adminSupabase
           .from("profiles")
           .select("charity_id, charity_percentage")
-          .eq("id", userId)
+          .eq("id", uid)
           .single();
 
         const percentage = profile?.charity_percentage || 0;
         const donationAmount = (payout * percentage) / 100;
 
-        const winner = {
-          user_id: userId,
+        winnerRows.push({
+          user_id: uid,
           draw_id: draw.id,
           match_count: tier,
           payout,
           status: "pending",
           payment_status: "pending",
-        };
-
-        winnerRows.push(winner);
+        });
 
         if (profile?.charity_id && donationAmount > 0) {
           donationRows.push({
-            user_id: userId,
+            user_id: uid,
             charity_id: profile.charity_id,
             amount: donationAmount,
           });
@@ -153,14 +276,13 @@ export async function POST() {
       }
     }
 
-    // Batch inserts
     if (winnerRows.length) {
-      const { data: insertedWinners } = await supabase
-        .from("winners")
-        .insert(winnerRows)
-        .select();
+      const { data: insertedWinners } =
+        await adminSupabase
+          .from("winners")
+          .insert(winnerRows)
+          .select();
 
-      // Link donations to winners
       insertedWinners?.forEach((w, i) => {
         if (donationRows[i]) {
           donationRows[i].winner_id = w.id;
@@ -168,17 +290,19 @@ export async function POST() {
       });
 
       if (donationRows.length) {
-        await supabase.from("donations").insert(donationRows);
+        await adminSupabase.from("donations").insert(donationRows);
       }
     }
 
     return NextResponse.json({
       success: true,
+      drawType,
       drawNumbers,
       rollover: newRollover,
     });
   } catch (err) {
     console.error(err);
+
     return NextResponse.json(
       { error: "Server error" },
       { status: 500 }

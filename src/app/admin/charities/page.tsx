@@ -2,23 +2,32 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 export default function AdminCharities() {
   const [charities, setCharities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // 🔹 Fetch
+  /* ================= FETCH ================= */
   const fetchCharities = async () => {
-    const { data } = await supabase
+    setLoading(true);
+
+    const { data, error } = await supabase
       .from("charities")
       .select("*")
       .order("created_at", { ascending: false });
 
-    setCharities(data || []);
+    if (error) toast.error("Failed to load charities");
+    else setCharities(data || []);
+
     setLoading(false);
   };
 
@@ -26,134 +35,224 @@ export default function AdminCharities() {
     fetchCharities();
   }, []);
 
-  // 🔹 Create / Update
+  /* ================= SAVE ================= */
   const handleSave = async () => {
-    if (!name) return alert("Name required");
+    if (!name.trim()) return toast.error("Charity name required");
 
-    if (editingId) {
-      await supabase
-        .from("charities")
-        .update({ name, description })
-        .eq("id", editingId);
-    } else {
-      await supabase.from("charities").insert({
-        name,
-        description,
-      });
+    setSaving(true);
+
+    try {
+      if (editingId) {
+        await supabase
+          .from("charities")
+          .update({
+            name,
+            description,
+            image_url: imageUrl,
+          })
+          .eq("id", editingId);
+
+        toast.success("Updated");
+      } else {
+        await supabase.from("charities").insert({
+          name,
+          description,
+          image_url: imageUrl,
+        });
+
+        toast.success("Created");
+      }
+
+      resetForm();
+      fetchCharities();
+    } catch {
+      toast.error("Failed");
+    } finally {
+      setSaving(false);
     }
-
-    resetForm();
-    fetchCharities();
   };
 
-  // 🔹 Delete
+  /* ================= DELETE ================= */
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this charity?")) return;
 
-    await supabase.from("charities").delete().eq("id", id);
-    fetchCharities();
+    setDeletingId(id);
+
+    try {
+      await supabase.from("charities").delete().eq("id", id);
+      toast.success("Deleted");
+      fetchCharities();
+    } catch {
+      toast.error("Failed");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  // 🔹 Edit
+  /* ================= EDIT ================= */
   const handleEdit = (c: any) => {
     setName(c.name);
     setDescription(c.description || "");
+    setImageUrl(c.image_url || "");
     setEditingId(c.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // 🔹 Reset
   const resetForm = () => {
     setName("");
     setDescription("");
+    setImageUrl("");
     setEditingId(null);
   };
 
-  if (loading) return <div className="p-10">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="p-20 text-center text-muted-foreground">
+        Loading charities...
+      </div>
+    );
+  }
 
   return (
-    <div className="p-10 max-w-4xl mx-auto">
+    <div className="section space-y-12">
 
-      <h1 className="text-2xl font-bold mb-6">
-        Manage Charities
-      </h1>
+      {/* HEADER */}
+      <div>
+        <h1 className="text-4xl font-semibold">Charities</h1>
+        <p className="text-muted-foreground">
+          Manage impact-driven organizations
+        </p>
+      </div>
 
-      {/* 🔥 FORM */}
-      <div className="border p-6 rounded-xl mb-10">
-        <h2 className="text-lg mb-4">
+      {/* FORM */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-3xl border border-border bg-white/70 backdrop-blur-xl p-6 shadow-lg"
+      >
+        <h2 className="text-lg font-semibold mb-4">
           {editingId ? "Edit Charity" : "Add Charity"}
         </h2>
 
-        <input
-          type="text"
-          placeholder="Charity Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="border p-2 w-full mb-3"
-        />
+        <div className="grid md:grid-cols-2 gap-4">
 
-        <textarea
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="border p-2 w-full mb-3"
-        />
+          <input
+            placeholder="Charity Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="input"
+          />
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleSave}
-            className="bg-green-600 text-white px-4 py-2 rounded"
-          >
-            {editingId ? "Update" : "Create"}
+          <input
+            placeholder="Image URL (Unsplash recommended)"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            className="input"
+          />
+
+          <textarea
+            placeholder="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="input md:col-span-2"
+          />
+        </div>
+
+        {/* IMAGE PREVIEW */}
+        {imageUrl && (
+          <div className="mt-4 overflow-hidden rounded-2xl">
+            <img
+              src={imageUrl}
+              alt="Preview"
+              className="w-full h-52 object-cover"
+            />
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-5">
+          <button onClick={handleSave} className="btn-primary">
+            {saving
+              ? "Saving..."
+              : editingId
+              ? "Update"
+              : "Create"}
           </button>
 
           {editingId && (
-            <button
-              onClick={resetForm}
-              className="bg-gray-500 text-white px-4 py-2 rounded"
-            >
+            <button onClick={resetForm} className="btn-secondary">
               Cancel
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
 
-      {/* 🔥 LIST */}
+      {/* LIST */}
       <div>
-        <h2 className="text-lg mb-4">All Charities</h2>
+        <h2 className="text-xl font-semibold mb-6">
+          All Charities
+        </h2>
 
         {charities.length === 0 && (
-          <p className="text-gray-500">No charities yet</p>
+          <div className="text-center text-muted-foreground py-20">
+            No charities yet — create your first one 🌱
+          </div>
         )}
 
-        {charities.map((c) => (
-          <div
-            key={c.id}
-            className="border p-4 mb-4 rounded flex justify-between items-center"
-          >
-            <div>
-              <p className="font-semibold">{c.name}</p>
-              <p className="text-sm text-gray-500">
-                {c.description}
-              </p>
-            </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleEdit(c)}
-                className="bg-blue-600 text-white px-3 py-1 rounded"
-              >
-                Edit
-              </button>
+          {charities.map((c) => (
+            <motion.div
+              key={c.id}
+              whileHover={{ y: -6 }}
+              className="group rounded-3xl border border-border bg-white shadow-sm overflow-hidden transition"
+            >
+              {/* IMAGE */}
+              <div className="relative overflow-hidden">
+                <img
+                  src={
+                    c.image_url ||
+                    "https://images.unsplash.com/photo-1509099836639-18ba1795216d?q=80&w=1200"
+                  }
+                  alt={c.name}
+                  className="h-48 w-full object-cover group-hover:scale-105 transition"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+              </div>
 
-              <button
-                onClick={() => handleDelete(c.id)}
-                className="bg-red-600 text-white px-3 py-1 rounded"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+              {/* CONTENT */}
+              <div className="p-5 space-y-2">
+                <h3 className="text-lg font-semibold">
+                  {c.name}
+                </h3>
+
+                <p className="text-sm text-muted-foreground line-clamp-3">
+                  {c.description || "No description"}
+                </p>
+
+                {/* ACTIONS */}
+                <div className="flex gap-2 pt-3">
+                  <button
+                    onClick={() => handleEdit(c)}
+                    className="btn-secondary text-sm"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    disabled={deletingId === c.id}
+                    className="px-3 py-1 rounded-lg bg-red-500 text-white text-sm"
+                  >
+                    {deletingId === c.id
+                      ? "Deleting..."
+                      : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+
+        </div>
       </div>
     </div>
   );
