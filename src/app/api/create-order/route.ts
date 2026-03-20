@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
 import { supabase } from "@/lib/supabase";
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
-
 export async function POST(req: Request) {
   try {
     /* ================= AUTH ================= */
@@ -44,6 +39,12 @@ export async function POST(req: Request) {
 
     /* ================= AMOUNT ================= */
     const amount = plan === "monthly" ? 10000 : 100000;
+
+    /* ================= RAZORPAY INIT (FIXED) ================= */
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    });
 
     /* ================= ORDER ================= */
     const order = await razorpay.orders.create({
