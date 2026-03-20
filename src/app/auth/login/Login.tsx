@@ -9,43 +9,29 @@ import { motion } from "framer-motion";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(true); // start true until session checked
+
+  const [loading, setLoading] = useState(false); // for button
+  const [checkingSession, setCheckingSession] = useState(true); // for initial load
 
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  /* ================= AUTH LISTENER (CRITICAL FIX) ================= */
+  /* ================= CHECK EXISTING SESSION ================= */
   useEffect(() => {
-    let isMounted = true;
-
-    // 1️⃣ Check existing session immediately
     const checkSession = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session && isMounted) {
+      if (session) {
         router.replace("/dashboard");
-      } else {
-        setLoading(false); // allow UI if not logged in
+        return;
       }
+
+      setCheckingSession(false);
     };
 
     checkSession();
-
-    // 2️⃣ Listen for login/logout changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        router.replace("/dashboard");
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, [router]);
 
   /* ================= LOGIN ================= */
@@ -59,7 +45,7 @@ export default function Login() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -70,12 +56,25 @@ export default function Login() {
       return;
     }
 
-    // ✅ NO manual redirect
-    // auth listener will handle it
+    // ✅ FORCE SESSION CHECK (REAL FIX)
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      toast.error("Login failed. Try again.");
+      setLoading(false);
+      return;
+    }
+
+    const redirectTo =
+      searchParams.get("redirect") || "/dashboard";
+
+    router.replace(redirectTo);
   };
 
   /* ================= LOADING SCREEN ================= */
-  if (loading) {
+  if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-sm text-muted-foreground">Checking session...</p>
@@ -113,13 +112,11 @@ export default function Login() {
           className="w-full max-w-md"
         >
           <div className="rounded-3xl border border-border bg-white/80 backdrop-blur-xl p-8 shadow-xl">
-            {/* HEADER */}
             <h1 className="text-3xl font-semibold">Login</h1>
             <p className="text-muted-foreground mt-2">
               Access your account
             </p>
 
-            {/* INPUTS */}
             <div className="mt-6 space-y-4">
               <input
                 type="email"
@@ -138,7 +135,6 @@ export default function Login() {
               />
             </div>
 
-            {/* BUTTON */}
             <button
               onClick={handleLogin}
               disabled={loading}
@@ -147,7 +143,6 @@ export default function Login() {
               {loading ? "Logging in..." : "Login"}
             </button>
 
-            {/* FOOTER */}
             <p className="text-sm text-muted-foreground mt-6 text-center">
               Don’t have an account?{" "}
               <span

@@ -9,42 +9,28 @@ import { motion } from "framer-motion";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(true); // start true until session checked
+
+  const [loading, setLoading] = useState(false); // button loading
+  const [checkingSession, setCheckingSession] = useState(true); // initial check
 
   const router = useRouter();
 
-  /* ================= AUTH LISTENER (CRITICAL FIX) ================= */
+  /* ================= CHECK EXISTING SESSION ================= */
   useEffect(() => {
-    let isMounted = true;
-
-    // 1️⃣ Check existing session
     const checkSession = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session && isMounted) {
+      if (session) {
         router.replace("/dashboard");
-      } else {
-        setLoading(false);
+        return;
       }
+
+      setCheckingSession(false);
     };
 
     checkSession();
-
-    // 2️⃣ Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        router.replace("/dashboard");
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
   }, [router]);
 
   /* ================= SIGNUP ================= */
@@ -76,19 +62,29 @@ export default function Signup() {
 
     const user = data.user;
 
-    // ✅ create profile safely
+    // ✅ create profile
     if (user) {
       await supabase.from("profiles").upsert({
         id: user.id,
       });
     }
 
-    // ❌ no manual redirect
-    // listener will handle it
+    // ✅ FORCE SESSION CHECK (REAL FIX)
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      toast.error("Signup succeeded, but session not ready. Try login.");
+      setLoading(false);
+      return;
+    }
+
+    router.replace("/dashboard");
   };
 
   /* ================= LOADING SCREEN ================= */
-  if (loading) {
+  if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-sm text-muted-foreground">Checking session...</p>
@@ -125,7 +121,6 @@ export default function Signup() {
           className="w-full max-w-md"
         >
           <div className="rounded-3xl border border-border bg-white/80 backdrop-blur-xl p-8 shadow-xl">
-            {/* HEADER */}
             <h1 className="text-3xl font-semibold">
               Create account
             </h1>
@@ -133,7 +128,6 @@ export default function Signup() {
               Join the platform in seconds
             </p>
 
-            {/* INPUTS */}
             <div className="mt-6 space-y-4">
               <input
                 type="email"
@@ -156,7 +150,6 @@ export default function Signup() {
               </p>
             </div>
 
-            {/* BUTTON */}
             <button
               onClick={handleSignup}
               disabled={loading}
@@ -165,7 +158,6 @@ export default function Signup() {
               {loading ? "Creating account..." : "Sign Up"}
             </button>
 
-            {/* FOOTER */}
             <p className="text-sm text-muted-foreground mt-6 text-center">
               Already have an account?{" "}
               <span
