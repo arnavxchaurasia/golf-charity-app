@@ -8,39 +8,27 @@ export default function ProtectedRoute({
 }: {
   children: React.ReactNode;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [status, setStatus] = useState<"loading" | "authorized" | "unauthorized">("loading");
 
   useEffect(() => {
-    let mounted = true;
-
-    const checkSession = async () => {
-      // 🔥 small delay to allow session hydration
-      await new Promise((r) => setTimeout(r, 100));
-
+    const init = async () => {
+      // 🔥 get session once (correct way)
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!session) {
-        window.location.href = "/auth/login";
-        return;
-      }
-
-      if (mounted) {
-        setAuthorized(true);
-        setLoading(false);
+      if (session) {
+        setStatus("authorized");
+      } else {
+        setStatus("unauthorized");
       }
     };
 
-    checkSession();
-
-    return () => {
-      mounted = false;
-    };
+    init();
   }, []);
 
-  if (loading) {
+  /* ---------------- LOADING ---------------- */
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-sm text-muted-foreground">
@@ -50,7 +38,14 @@ export default function ProtectedRoute({
     );
   }
 
-  if (!authorized) return null;
+  /* ---------------- REDIRECT ---------------- */
+  if (status === "unauthorized") {
+    if (typeof window !== "undefined") {
+      window.location.href = "/auth/login";
+    }
+    return null;
+  }
 
+  /* ---------------- AUTHORIZED ---------------- */
   return <>{children}</>;
 }
