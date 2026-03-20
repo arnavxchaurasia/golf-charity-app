@@ -1,16 +1,16 @@
-import { redirect } from "next/navigation";
 import Login from "./Login";
-import { supabase } from "@/lib/supabase";
+import { Suspense } from "react";
 
-export default async function LoginPage() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // ✅ if logged in → redirect
-  if (user) {
-    redirect("/dashboard");
-  }
-
-  return <Login />;
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      }
+    >
+      <Login />
+    </Suspense>
+  );
 }

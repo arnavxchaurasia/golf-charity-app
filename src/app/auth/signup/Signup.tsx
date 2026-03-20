@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -13,6 +13,22 @@ export default function Signup() {
 
   const router = useRouter();
 
+  /* ================= AUTO REDIRECT IF LOGGED IN ================= */
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        router.replace("/dashboard");
+      }
+    };
+
+    checkUser();
+  }, [router]);
+
+  /* ================= SIGNUP ================= */
   const handleSignup = async () => {
     if (loading) return;
 
@@ -41,7 +57,7 @@ export default function Signup() {
 
     const user = data.user;
 
-    // ✅ create profile (safe insert)
+    // ✅ create profile
     if (user) {
       await supabase.from("profiles").upsert({
         id: user.id,
@@ -59,7 +75,6 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen grid md:grid-cols-2">
-
       {/* LEFT SIDE IMAGE */}
       <div className="hidden md:block relative">
         <img
@@ -81,14 +96,12 @@ export default function Signup() {
 
       {/* RIGHT SIDE FORM */}
       <div className="flex items-center justify-center p-6">
-
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
           <div className="rounded-3xl border border-border bg-white/80 backdrop-blur-xl p-8 shadow-xl">
-
             {/* HEADER */}
             <h1 className="text-3xl font-semibold">
               Create account
@@ -99,7 +112,6 @@ export default function Signup() {
 
             {/* INPUTS */}
             <div className="mt-6 space-y-4">
-
               <input
                 type="email"
                 placeholder="Email"
@@ -140,10 +152,8 @@ export default function Signup() {
                 Login
               </span>
             </p>
-
           </div>
         </motion.div>
-
       </div>
     </div>
   );

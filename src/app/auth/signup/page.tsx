@@ -1,15 +1,16 @@
-import { redirect } from "next/navigation";
 import Signup from "./Signup";
-import { supabase } from "@/lib/supabase";
+import { Suspense } from "react";
 
-export default async function SignupPage() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
-  return <Signup />;
+export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      }
+    >
+      <Signup />
+    </Suspense>
+  );
 }
