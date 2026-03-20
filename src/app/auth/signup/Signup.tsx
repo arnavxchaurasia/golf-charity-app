@@ -10,8 +10,8 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [loading, setLoading] = useState(false); // button loading
-  const [checkingSession, setCheckingSession] = useState(true); // initial check
+  const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   const router = useRouter();
 
@@ -23,7 +23,8 @@ export default function Signup() {
       } = await supabase.auth.getSession();
 
       if (session) {
-        router.replace("/dashboard");
+        // 🔥 FIX: force full reload
+        window.location.href = "/dashboard";
         return;
       }
 
@@ -31,7 +32,7 @@ export default function Signup() {
     };
 
     checkSession();
-  }, [router]);
+  }, []);
 
   /* ================= SIGNUP ================= */
   const handleSignup = async () => {
@@ -69,25 +70,17 @@ export default function Signup() {
       });
     }
 
-    // ✅ FORCE SESSION CHECK (REAL FIX)
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      toast.error("Signup succeeded, but session not ready. Try login.");
-      setLoading(false);
-      return;
-    }
-
-    router.replace("/dashboard");
+    // 🔥 FINAL FIX: force reload after signup
+    window.location.href = "/dashboard";
   };
 
   /* ================= LOADING SCREEN ================= */
   if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Checking session...</p>
+        <p className="text-sm text-muted-foreground">
+          Checking session...
+        </p>
       </div>
     );
   }

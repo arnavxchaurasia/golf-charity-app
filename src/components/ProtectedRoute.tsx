@@ -12,28 +12,40 @@ export default function ProtectedRoute({
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     const checkSession = async () => {
+      // 🔥 small delay to allow session hydration
+      await new Promise((r) => setTimeout(r, 100));
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
       if (!session) {
-        // 🔥 use hard redirect (avoids Next.js state issues)
         window.location.href = "/auth/login";
         return;
       }
 
-      setAuthorized(true);
-      setLoading(false);
+      if (mounted) {
+        setAuthorized(true);
+        setLoading(false);
+      }
     };
 
     checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (loading) {
     return (
-      <div className="p-10 text-center">
-        Checking auth...
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          Checking auth...
+        </p>
       </div>
     );
   }

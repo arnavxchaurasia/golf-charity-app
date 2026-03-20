@@ -10,8 +10,8 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const [loading, setLoading] = useState(false); // for button
-  const [checkingSession, setCheckingSession] = useState(true); // for initial load
+  const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -24,7 +24,8 @@ export default function Login() {
       } = await supabase.auth.getSession();
 
       if (session) {
-        router.replace("/dashboard");
+        // 🔥 FIX: force full reload
+        window.location.href = "/dashboard";
         return;
       }
 
@@ -32,7 +33,7 @@ export default function Login() {
     };
 
     checkSession();
-  }, [router]);
+  }, []);
 
   /* ================= LOGIN ================= */
   const handleLogin = async () => {
@@ -45,7 +46,7 @@ export default function Login() {
 
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -56,28 +57,20 @@ export default function Login() {
       return;
     }
 
-    // ✅ FORCE SESSION CHECK (REAL FIX)
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      toast.error("Login failed. Try again.");
-      setLoading(false);
-      return;
-    }
-
+    // 🔥 FINAL FIX: force reload after login
     const redirectTo =
       searchParams.get("redirect") || "/dashboard";
 
-    router.replace(redirectTo);
+    window.location.href = redirectTo;
   };
 
   /* ================= LOADING SCREEN ================= */
   if (checkingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Checking session...</p>
+        <p className="text-sm text-muted-foreground">
+          Checking session...
+        </p>
       </div>
     );
   }
